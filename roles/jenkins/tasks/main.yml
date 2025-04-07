@@ -86,3 +86,23 @@
   args:
     creates: /var/lib/jenkins/plugins/git.jpi
 
+- name: Create .ssh directory for Jenkins
+  file:
+    path: /var/lib/jenkins/.ssh
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: '0700'
+
+- name: Ensure SSH key pair exists for Jenkins user
+  become: true
+  shell: |
+    ssh-keygen -t rsa -b 4096 -f /var/lib/jenkins/.ssh/id_rsa -q -N ""
+  args:
+    creates: /var/lib/jenkins/.ssh/id_rsa
+
+- name: Read Jenkins master public key
+  become: true
+  slurp:
+    src: /var/lib/jenkins/.ssh/id_rsa.pub
+  register: jenkins_master_pubkey

@@ -1,0 +1,52 @@
+- name: Update system packages
+  apt:
+    update_cache: yes
+    upgrade: dist
+    cache_valid_time: 3600
+
+- name: Install Java (OpenJDK 17)
+  apt:
+    name: openjdk-17-jdk
+    state: present
+
+- name: Create Jenkins user
+  user:
+    name: jenkins
+    shell: /bin/bash
+
+- name: Create .ssh directory for Jenkins user
+  file:
+    path: /home/jenkins/.ssh
+    state: directory
+    mode: 0700
+    owner: jenkins
+    group: jenkins
+
+#- name: Copy public key for Jenkins master
+#  copy:
+#    src: /path/to/public_key.pub  # Or use Ansible vars/template
+#    dest: /home/jenkins/.ssh/authorized_keys
+#    owner: jenkins
+#    group: jenkins
+#    mode: 0600
+
+- name: Allow SSH through firewall
+  ufw:
+    rule: allow
+    port: 22
+    proto: tcp
+
+- name: Install Git and Docker
+  apt:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - git
+    - docker.io
+
+- name: Add Jenkins master public key to build-node
+  become: true
+  authorized_key:
+    user: jenkins
+    key: "{{ hostvars['jenkins-master']['jenkins_master_pubkey']['content'] | b64decode }}"
+    state: present
