@@ -1,0 +1,88 @@
+---
+- name: Update system packages
+  apt:
+    update_cache: yes
+    upgrade: dist
+    cache_valid_time: 3600
+
+- name: Install Java (OpenJDK 17)
+  apt:
+    name: openjdk-17-jdk
+    state: present
+
+- name: Add Jenkins GPG key
+  apt_key:
+    url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+    state: present
+
+- name: Add Jenkins repository
+  apt_repository:
+    repo: deb http://pkg.jenkins.io/debian-stable binary/
+    state: present
+
+- name: Install Jenkins
+  apt:
+    name: jenkins
+    state: present
+    update_cache: yes
+
+- name: Start and enable Jenkins service
+  systemd:
+    name: jenkins
+    state: started
+    enabled: yes
+
+- name: Allow Jenkins and SSH in UFW firewall
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - 8080  # Jenkins
+    - 22    # SSH
+
+- name: Fetch Jenkins initial admin password
+  command: cat /var/lib/jenkins/secrets/initialAdminPassword
+  register: jenkins_password
+
+- name: Show Jenkins admin password
+  debug:
+    msg: "Jenkins Initial Password: {{ jenkins_password.stdout }}"
+
+- name: Download Jenkins CLI jar
+  get_url:
+    url: http://localhost:8080/jnlpJars/jenkins-cli.jar
+    dest: /var/lib/jenkins/jenkins-cli.jar
+    mode: '0644'
+
+- name: Ensure init.groovy.d directory exists
+  file:
+    path: /var/lib/jenkins/init.groovy.d
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: '0755'
+
+- name: Create Jenkins admin user
+  template:
+    src: jenkins-admin-user.groovy.j2
+    dest: /var/lib/jenkins/init.groovy.d/admin.groovy
+    owner: jenkins
+    group: jenkins
+    mode: 0644
+  notify: Restart Jenkins
+
+- name: Restart Jenkins
+  systemd:
+    name: jenkins
+    state: restarted
+
+- name: Install Jenkins plugins
+  shell: >
+    java -jar /var/lib/jenkins/jenkins-cli.jar
+    -s http://localhost:8080
+    -auth {{ jenkins_admin_user }}:{{ jenkins_admin_password }}
+    install-plugin git workflow-aggregator:608.v67378e9d3db_1 docker-workflow
+  args:
+    creates: /var/lib/jenkins/plugins/git.jpi
+

@@ -1,0 +1,6 @@
+# build-node.yml
+- name: Configure Build Node
+  hosts: build-node
+  become: true
+  roles:
+    - build-node
